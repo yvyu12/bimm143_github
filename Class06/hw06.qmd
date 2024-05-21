@@ -1,0 +1,47 @@
+---
+title: "Homework 6"
+author: "Yvonne Yu A16333006"
+format: pdf
+---
+
+The following code declares the library packages that are needed to be used. Installation of the package was conducted through `install.packages("bio3d")`.
+```{r}
+library(bio3d)
+```
+
+The following code gives a breakdown of the proposed function. 
+
+The function is aimed to take a specified protein of interest and generate a plot based on the protein structure of chain A and the targeted column of focus. 
+```{r}
+#the input of the function is the specified protein of interest
+newfun <- function(input) {
+
+    #reads the input protein and assigns it to variable s
+    s <- read.pdb(input)
+
+    #isolates the protein structure to the targeted chain
+    s.chainA <- trim.pdb(s, chain="A", elety="CA")
+
+    #assigns a variable to the targeted column of focus
+    s.b <- s.chainA$atom$b
+
+    #plots the vector, adding the secondary structure, 
+    #assigning the type of plot and the title of the y-axis
+    plotb3(s.b, sse=s.chainA, typ="l", ylab="Bfactor")
+    }
+```
+
+The following code runs the function to make sure it is successful. 
+```{r}
+#the sample list of variables to be inputted
+protein_list <- c("4AKE", "1AKE", "1E4Y")
+
+#run
+for (i in protein_list) {
+    print(i)
+    newfun(i)
+    }
+
+```
+
+
