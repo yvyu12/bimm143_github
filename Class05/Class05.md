@@ -7,7 +7,7 @@ Yvonne Yu (A16333006)
 Today we will have our first play with the **ggplot2** package - one of
 the most popular graphics package son the planet.
 
-There are amny plotting systems in R. These include so called *“base”*
+There are many plotting systems in R. These include so called *“base”*
 plotting/graphics.
 
 ``` r
