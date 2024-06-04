@@ -1,4 +1,4 @@
-# bimm143_github
+# BIMM 143: Bioinformatics Lab SP24
 Classwork for BIMM 143 S24 at UC San Diego
 
 - Class 4 [R Basics](https://github.com/yvyu12/bimm143_github/tree/main/Class04)
