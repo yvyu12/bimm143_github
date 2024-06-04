@@ -1,0 +1,280 @@
+---
+title: "Class 14: RNASeq Mini-Project"
+author: "Yvonne Yu A16333006"
+format: pdf
+toc: TRUE
+---
+
+A complete RNASeq analysis from counts to pathways and biological insight would be conducted.
+
+## Data Import
+
+```{r}
+#Assigns the files to the object
+counts <- read.csv("GSE37704_featurecounts.csv", row.names = 1)
+metadata <- read.csv("GSE37704_metadata.csv")
+
+#Visualizes the files
+head(counts)
+head(metadata)
+```
+
+The following would delete the first column that identifies the length, and turn the counts into matrix. 
+```{r}
+#Deletes the first column as it is not a count
+counts <- as.matrix(counts[,-1])
+head(counts)
+```
+The following code removes the rows that has 0 counts through all of the samples. There was an identified of 15975 genes that remains after the removal.  
+```{r}
+#Determines the rows that don't have a sum of zero
+x <- rowSums(counts) != 0
+
+#Extracts those rows from the count dataset and assigns it to a new object
+new_counts <- counts[x,]
+head(new_counts)
+
+#Compares the dimensions to ensure that the rows were removed
+dim(counts)
+dim(new_counts)
+```
+
+## Setup for DESeq
+
+Load in the necessary libraries for the project
+```{r}
+#| message: false
+
+library(DESeq2)
+```
+
+## Running DESeq
+
+DESeq analysis is conducted by creating the DESeq object and visual outputs the results. 
+```{r}
+#Formats the counts matrix
+dds <- DESeqDataSetFromMatrix(countData=new_counts,
+                             colData=metadata,
+                             design=~condition)
+
+#Assigns the DESeq object to dds
+dds <- DESeq(dds)
+
+dds
+```
+
+Provides a summary of the results, contrasting based on the condition.
+```{r}
+res <- results(dds, contrast=c("condition", "hoxa1_kd", "control_sirna"))
+summary(res)
+```
+
+## Save the file at current progress
+```{r}
+write.csv(res, "myresults.csv")
+```
+
+
+
+## Add gene annotation data (gene names etc.)
+
+Adds the gene annotation data by adding the symbol, entrezID, and the gene name. 
+```{r}
+#Pulls the libraries that would be utilized
+library("AnnotationDbi")
+library("org.Hs.eg.db")
+
+#Visualizes the columns that are identified in the `org.Hs.eg.db` package
+columns(org.Hs.eg.db)
+
+#Creates a column called "symbol" that would put the symbol of the gene
+#based on the ENSEMBL id
+res$symbol = mapIds(org.Hs.eg.db,
+                    keys = row.names(res), 
+                    keytype= "ENSEMBL",
+                    column= "SYMBOL",
+                    multiVals= "first")
+
+#Creates a column called "entrez" that would put the entrezID of the gene
+#based on the ENSEMBL id
+res$entrez = mapIds(org.Hs.eg.db,
+                    keys= row.names(res),
+                    keytype= "ENSEMBL",
+                    column= "ENTREZID",
+                    multiVals= "first")
+
+#Creates a column called "name" that would put the Gene Name of the gene
+#based on the ENSEMBL id
+res$name =   mapIds(org.Hs.eg.db,
+                    keys= row.names(res),
+                    keytype= "ENSEMBL",
+                    column= "GENENAME",
+                    multiVals="first")
+
+head(res, 10)
+```
+
+## Results visualization
+
+The Following would create a volcano plot, with the addition of the cut off lines and color coding the significant dataplots. 
+```{r}
+#Makes all of the datapoints grey
+mycols <- rep("grey", nrow(res))
+
+#Identifies the locations of the plots that have a log2fold change that is
+#greater than 2 or less than -2 (in red)
+mycols[abs(res$log2FoldChange) >= 2 ] <- "red"
+
+#Identifies the locations of the plots that have a log2fold change that is
+#greater than 2 or less than -2, and has a p-value less than 0.05 (in blue)
+mycols[-log(res$padj) >= -log2(0.05) & abs(res$log2FoldChange) >=2] <- "blue"
+
+#Plots the graph
+plot(res$log2FoldChange, -log(res$padj), 
+     col = mycols, ylab = "Log2 of Adjusted P-value", 
+     xlab = "Log2 Fold Change")
+
+#Creates the lines at -2 and 2 (which is basically the cut off for significant points)
+abline(v = -2, col = "gray")
+abline(v = 2, col = "gray")
+
+#Cut off for the p-value less than 0.05
+abline(h = -log(0.05), col = "gray")
+
+```
+
+## Save our Results
+
+```{r}
+#Orders the res dataset based on the p-value
+res <- res[order(res$pvalue),]
+
+#Saves the res file into a csv file
+write.csv(res, file = "deseq_results.csv")
+```
+
+## Pathway analysis (KEGG, GO, Reactome)
+
+### KEGG
+
+Load the libraries that are needed for the pathway analysis
+```{r}
+#| message: false
+ 
+library(pathview)
+library(gage)
+library(gageData)
+```
+
+```{r}
+data(kegg.sets.hs)
+
+# Examine the first 3 pathways
+head(kegg.sets.hs, 2)
+```
+
+```{r}
+#Identifies the entrez ids with the log2foldchange values
+foldchanges <- res$log2FoldChange
+names(foldchanges) <- res$entrez
+head(foldchanges)
+```
+
+```{r}
+#utilizes the gage analysis to pull the more significant of the pathways
+keggres <- gage(foldchanges, gsets=kegg.sets.hs)
+attributes(keggres)
+head(keggres$less)
+pathview(gene.data=foldchanges, pathway.id="hsa04110")
+```
+
+![HSA04110 pathway](hsa04110.pathview.png)
+Identifies the top 5 up regulated pathways 
+```{r}
+#Extracting the pathways for the top 5 up-regulated pathways
+up_keggrespathways <- rownames(keggres$greater)[1:5]
+
+# Extract the 8 character long IDs part of each string
+up_keggresids = substr(up_keggrespathways, start=1, stop=8)
+up_keggresids
+
+pathview(gene.data=foldchanges, pathway.id=up_keggresids, species="hsa")
+```
+
+The following figures are pathways that are found to up-regulate. 
+
+![HSA04640](hsa04640.pathview.png)
+
+![hsa05323](hsa05323.pathview.png)
+
+![hsa05146](hsa05146.pathview.png)
+
+![hsa05332](hsa05332.pathview.png)
+
+![hsa04640](hsa04640.pathview.png)
+Identifies the Top 5 Down Regulated Pathways
+```{r}
+#Extracting the pathways for the top 5 down-regulated pathways
+low_keggrespathways <- rownames(keggres$less)[1:5]
+
+# Extract the 8 character long IDs part of each string
+low_keggresids = substr(low_keggrespathways, start=1, stop=8)
+low_keggresids
+
+pathview(gene.data=foldchanges, pathway.id=low_keggresids, species="hsa")
+```
+
+![hsa04110](hsa04110.pathview.png)
+
+![hsa03030](hsa03030.pathview.png)
+
+![hsa05130](hsa05130.pathview.png)
+
+![hsa03013](hsa03013.pathview.png)
+
+![hsa03440](hsa03440.pathview.png)
+
+### GO
+
+The following code chunk utilizes GO to identify significant pathways. 
+```{r}
+data(go.sets.hs)
+data(go.subs.hs)
+
+# Focus on Biological Process subset of GO
+gobpsets <- go.sets.hs[go.subs.hs$BP]
+
+gobpres <- gage(foldchanges, gsets=gobpsets)
+
+```
+
+```{r}
+head(gobpres$less)
+```
+
+### Reactome
+
+The utilization of reactome is possible through an R package or through the online version, which allows for a more user friendly digital workflow on interactive visualization features. The following would be utilizing the web version. 
+
+First the creation of significant genes is necessary. 
+```{r}
+sig_genes <- res[res$padj <= 0.05 & !is.na(res$padj), "symbol"]
+print(paste("Total number of significant genes:", length(sig_genes)))
+
+write.table(sig_genes, file="significant_genes.txt", 
+            row.names=FALSE, col.names=FALSE, quote=FALSE)
+```
+
+![Output for the Reactome](PathwaysOverview.png)
+
+![Pathway of the Most Significant Entities P-value](R-HSA-69278.jpeg)
+
+The most significant pathway that was identified through Reactome was the Cell Cycle, which is similar to what was identified through KEGG. 
+
+### GO Online Results
+
+The following outputs the reuslts that was found from using the GO Online Pathway. 
+![Results from GO Online](Screenshot 2024-05-16 122938.png)
+
+From the utilization of GO, it was identified that the regulation of the actin filament polymerization was found to be the most significant, through FDR calculated p-value. 
+

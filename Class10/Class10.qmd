@@ -1,0 +1,169 @@
+---
+title: "Class 10: Structural Bioinformatics Part 1"
+author: "Yvonne Yu (A16333006)"
+format: pdf
+---
+
+## What is in the PDB database
+
+The main repository of the bioinformatic structure info is the PDB database. <www.rcsb.com>
+
+The database contains the following: 
+
+```{r}
+stats <- read.csv("Class10data.csv", row.names = 1)
+stats
+```
+
+> Q1. What percentage of structures in the PDB are solved by X-ray and Electron Microscopy?
+
+Need to get rid of the commas to be able to convert to numeric. Can you find a function to get rid of the commas?
+
+```{r}
+x <- stats$X.ray
+sum(as.numeric(gsub(",", "", x)))
+
+```
+
+I am going to turn this into a function and then use `apply()` to work on the entire table of data. 
+
+```{r}
+sumcomma <- function(x) {
+  sum(as.numeric(gsub(",", "", x)))
+}
+
+sumcomma(stats$X.ray)
+```
+
+```{r}
+ntotal <- sumcomma(stats$Total)
+ntotal
+```
+
+```{r}
+apply(stats, 2, sumcomma)
+```
+
+```{r}
+apply(stats, 2, sumcomma) / sumcomma(stats$Total)
+```
+
+> Q2. What proportion of structures in the PDB are protein?
+
+```{r}
+stats$Total <- as.numeric(gsub(",", "", stats$Total))
+
+stats[1,"Total"]/sum(sumcomma(stats$Total))
+```
+86.7% of the structures are from protein only. 
+
+> Q3. Type HIV in the PDB website search box on the home page and determine how many HIV-1 protease structures are in the current PDB?
+
+
+There is 248,805,733 entries found on the UniProt, compared to the 186,898 on the PDB protein entries, meaning that there is about ~0.075% that has identified. 
+
+```{r}
+(186898/248805733) * 100
+```
+
+## Visualizing the HIV-1 protease structure
+
+Mol* ("mol-star") view is now everywhere. The homepage is: https://molstar.org/viewer/.
+
+I want to insert my image from Mol* here. 
+
+![My first molecular image](1HSG.png)
+
+Here is an image of the targetted aspartic acid for Chains A and B, as well as the water molecule that has a strong interaction with the ligand and the chains. 
+
+![](1HSG.1.png)
+
+## Working with the bio3d package
+
+```{r}
+library(bio3d)
+```
+
+```{r}
+pdb <- read.pdb("1hsg")
+pdb
+```
+```{r}
+head(pdb$atom)
+```
+```{r}
+pdbseq(pdb)[25]
+```
+
+## Predicting functional motions of a single structure
+
+We can do a bioinformatics prediction of functional motions (i.e. flexibility and dynamics)
+
+```{r}
+pdb <- read.pdb("6s36")
+pdb
+```
+
+```{r}
+m <- nma(pdb)
+plot(m)
+```
+
+Creates a file that can be visualized in molstar. 
+
+```{r}
+mktrj(m, file = "adk_m7.pdb")
+```
+
+
+# Comparative Analysis of Protein Structure
+
+A complete pipeline of the analysis would be written through for a given protein family starting from a single database ID for a member of this family all the way to a deeper understanding of structure, dynamics, and function. 
+
+```{r}
+library(bio3d)
+```
+
+```{r}
+id <- "1ake_A"
+
+aa <- get.seq(id)
+aa
+```
+
+```{r}
+b <- blast.pdb(aa)
+```
+
+```{r}
+hits <- NULL
+
+hits$pdb.id <- c('1AKE_A','6S36_A','6RZE_A','3HPR_A','1E4V_A','5EJE_A','1E4Y_A','3X2S_A','6HAP_A','6HAM_A','4K46_A','3GMT_A','4PZL_A')
+```
+
+```{r}
+#Download the PDB related files, saves it in the pdbs files
+files <- get.pdb(hits$pdb.id, path="pdbs", split=TRUE, gzip=TRUE)
+```
+
+```{r}
+# This would align the files that were downloaded
+pdbs <- pdbaln(files, fit = TRUE, exefile="msa")
+```
+
+Print out the alignment. 
+```{r}
+pdbs
+```
+
+```{r}
+#Perform PCA
+pc.xray <- pca(pdbs)
+plot(pc.xray)
+```
+```{r}
+# Conducted to visualize the PC1 
+pc1 <- mktrj(pc.xray, pc=1, file="pc_1.pdb")
+```
+
+
